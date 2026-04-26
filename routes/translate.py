@@ -12,7 +12,8 @@ translate_bp = Blueprint("translate", __name__)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-BASE_URL = "https://procedure-upchuck-praying.ngrok-free.dev"
+# 🔥 FIXED: dynamic base URL (works locally + production)
+BASE_URL = os.environ.get("BASE_URL", "http://127.0.0.1:5000")
 
 
 # =========================
@@ -144,7 +145,7 @@ def translate_doc():
 
 
 # =========================
-# 🔥 LIVE TRANSLATION (FIXED)
+# 🔥 LIVE TRANSLATION
 # =========================
 @translate_bp.route("/live-translate", methods=["POST"])
 def live_translate():
@@ -158,25 +159,21 @@ def live_translate():
         path = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4().hex}.webm")
         audio.save(path)
 
-        # 🎤 SAFE TRANSCRIBE
         try:
             text = transcribe_audio(path, direction)
         except Exception as e:
             print("TRANSCRIBE ERROR:", e)
             text = ""
 
-        # ❌ skip empty audio
         if not text.strip():
             return jsonify({"error": "No speech"}), 200
 
-        # 🌍 TRANSLATE
         try:
             translated = do_translate(text, direction)
         except Exception as e:
             print("TRANSLATE ERROR:", e)
             return jsonify({"error": "Translate failed"}), 200
 
-        # 🔊 VOICE
         filename = f"{uuid.uuid4().hex}.mp3"
         out = os.path.join(UPLOAD_FOLDER, filename)
 
