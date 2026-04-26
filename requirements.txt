@@ -6,3 +6,4 @@ pydub
 python-docx
 pdfplumber
 deep-translator
+edge-tts
