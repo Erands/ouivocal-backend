@@ -31,6 +31,9 @@ def create_voice(text, direction, gender, output_path):
     async def generate():
         communicate = edge_tts.Communicate(text, voice)
         await communicate.save(output_path)
+        print("📁 Saving audio to:", output_path)
+        print("📦 File exists:", os.path.exists(output_path))
+        print("📏 File size:", os.path.getsize(output_path) if os.path.exists(output_path) else 0)
 
     # 🔥 RUN PROPERLY
     run_async(generate())
