@@ -1,184 +1,92 @@
-from flask import Blueprint, request, jsonify, send_from_directory, send_file
-import os, uuid
-from docx import Document
-import pdfplumber
+from flask import Blueprint, request, jsonify
+import os
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 
-from services.translation_service import do_translate
 from services.audio_service import transcribe_audio
+from services.translation_service import do_translate
+from services.voice_service import create_voice
 
 translate_bp = Blueprint("translate", __name__)
+
+# 🔥 Thread pool for parallel processing
+executor = ThreadPoolExecutor(max_workers=3)
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-BASE_URL = os.environ.get("BASE_URL", "http://127.0.0.1:5000")
-
 
 # =========================
-# 🎤 AUDIO TRANSLATION (FAST)
+# TEXT TRANSLATION
 # =========================
 @translate_bp.route("/translate", methods=["POST"])
+def translate_text():
+    data = request.json
+
+    text = data.get("text")
+    direction = data.get("direction")
+    gender = data.get("gender", "female")
+
+    if not text:
+        return jsonify({"error": "No text provided"}), 400
+
+    try:
+        # 🔥 Run translation + voice in parallel
+        future_translate = executor.submit(do_translate, text, direction)
+        future_voice = executor.submit(create_voice, text, direction, gender)
+
+        translated = future_translate.result()
+        audio = future_voice.result()
+
+        return jsonify({
+            "translated": translated,
+            "audio": audio
+        })
+
+    except Exception as e:
+        print("Error:", e)
+        return jsonify({"error": "Translation failed"}), 500
+
+
+# =========================
+# AUDIO TRANSLATION
+# =========================
+@translate_bp.route("/audio", methods=["POST"])
 def translate_audio():
     try:
-        if "audio" not in request.files:
-            return jsonify({"error": "No audio uploaded"}), 400
-
-        audio = request.files["audio"]
+        audio_file = request.files.get("audio")
         direction = request.form.get("direction")
+        gender = request.form.get("gender", "female")
 
-        path = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4().hex}.webm")
-        audio.save(path)
+        if not audio_file:
+            return jsonify({"error": "No audio file"}), 400
 
-        try:
-            text = transcribe_audio(path, direction)
-        except:
-            text = ""
+        filename = f"{uuid.uuid4().hex}.webm"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        audio_file.save(filepath)
 
-        if not text.strip():
-            return jsonify({"error": "No speech"}), 200
+        # 1️⃣ Transcribe first
+        text = transcribe_audio(filepath, direction)
 
-        translated = do_translate(text, direction)
+        if not text or "No speech" in text:
+            return jsonify({
+                "translated": "⚠️ No speech detected",
+                "audio": None
+            })
 
-        # 🔥 NO VOICE GENERATION (FAST RESPONSE)
+        # 2️⃣ Parallel translate + voice
+        future_translate = executor.submit(do_translate, text, direction)
+        future_voice = executor.submit(create_voice, text, direction, gender)
+
+        translated = future_translate.result()
+        audio = future_voice.result()
+
         return jsonify({
             "original": text,
             "translated": translated,
-            "audio": None
+            "audio": audio
         })
 
     except Exception as e:
-        print("AUDIO ERROR:", e)
-        return jsonify({"error": "Audio failed"}), 200
-
-
-# =========================
-# ✍️ TEXT TRANSLATION (FAST)
-# =========================
-@translate_bp.route("/translate-text", methods=["POST"])
-def translate_text():
-    try:
-        data = request.get_json()
-
-        text = data.get("text", "").strip()
-        direction = data.get("direction")
-
-        if not text:
-            return jsonify({"error": "Empty text"}), 400
-
-        translated = do_translate(text, direction)
-
-        # 🔥 NO VOICE GENERATION
-        return jsonify({
-            "original": text,
-            "translated": translated,
-            "audio": None
-        })
-
-    except Exception as e:
-        print("TEXT ERROR:", e)
-        return jsonify({"error": "Text failed"}), 500
-
-
-# =========================
-# 📄 DOCUMENT TRANSLATION
-# =========================
-@translate_bp.route("/translate-doc", methods=["POST"])
-def translate_doc():
-    try:
-        if "file" not in request.files:
-            return jsonify({"error": "No file uploaded"}), 400
-
-        file = request.files["file"]
-        direction = request.form.get("direction")
-
-        input_path = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4().hex}_{file.filename}")
-        file.save(input_path)
-
-        extracted_text = ""
-
-        if file.filename.lower().endswith(".pdf"):
-            with pdfplumber.open(input_path) as pdf:
-                for page in pdf.pages:
-                    extracted_text += (page.extract_text() or "") + "\n"
-
-        elif file.filename.lower().endswith(".docx"):
-            doc = Document(input_path)
-            for para in doc.paragraphs:
-                extracted_text += para.text + "\n"
-
-        else:
-            return jsonify({"error": "Unsupported format"}), 400
-
-        if not extracted_text.strip():
-            return jsonify({"error": "No readable text"}), 400
-
-        new_doc = Document()
-
-        for line in extracted_text.split("\n"):
-            if line.strip():
-                try:
-                    translated = do_translate(line, direction)
-                except:
-                    translated = line
-                new_doc.add_paragraph(translated)
-            else:
-                new_doc.add_paragraph("")
-
-        output = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4().hex}.docx")
-        new_doc.save(output)
-
-        return send_file(output, as_attachment=True, download_name="translated.docx")
-
-    except Exception as e:
-        print("DOC ERROR:", e)
-        return jsonify({"error": "Document failed"}), 500
-
-
-# =========================
-# 🔥 LIVE TRANSLATION (FAST)
-# =========================
-@translate_bp.route("/live-translate", methods=["POST"])
-def live_translate():
-    try:
-        if "audio" not in request.files:
-            return jsonify({"error": "No audio"}), 200
-
-        audio = request.files["audio"]
-        direction = request.form.get("direction", "en-fr")
-
-        path = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4().hex}.webm")
-        audio.save(path)
-
-        try:
-            text = transcribe_audio(path, direction)
-        except Exception as e:
-            print("TRANSCRIBE ERROR:", e)
-            text = ""
-
-        if not text.strip():
-            return jsonify({"error": "No speech"}), 200
-
-        try:
-            translated = do_translate(text, direction)
-        except Exception as e:
-            print("TRANSLATE ERROR:", e)
-            return jsonify({"error": "Translate failed"}), 200
-
-        # 🔥 NO VOICE GENERATION
-        return jsonify({
-            "text": text,
-            "translated": translated,
-            "audio": None
-        })
-
-    except Exception as e:
-        print("LIVE ERROR:", e)
-        return jsonify({"error": "Live failed"}), 200
-
-
-# =========================
-# 📥 SERVE FILES (kept for future use)
-# =========================
-@translate_bp.route("/uploads/<filename>")
-def serve_file(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename)
+        print("Audio error:", e)
+        return jsonify({"error": "Audio failed"}), 500
