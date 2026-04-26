@@ -31,3 +31,8 @@ PORT = int(os.environ.get("PORT", 10000))
 if __name__ == "__main__":
     print(f"🚀 Starting Flask on port {PORT}")
     app.run(host="0.0.0.0", port=PORT)
+    from flask import send_from_directory
+
+@app.route("/audio/<path:filename>")
+def serve_audio(filename):
+    return send_from_directory("outputs", filename)

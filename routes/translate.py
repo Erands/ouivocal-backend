@@ -13,7 +13,13 @@ translate_bp = Blueprint("translate", __name__)
 executor = ThreadPoolExecutor(max_workers=3)
 
 UPLOAD_FOLDER = "uploads"
+OUTPUT_FOLDER = "outputs"
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+# 🔥 IMPORTANT: CHANGE THIS TO YOUR RENDER URL
+BASE_URL = "https://ouivocal-api.onrender.com"
 
 
 # =========================
@@ -31,16 +37,21 @@ def translate_text():
         return jsonify({"error": "No text provided"}), 400
 
     try:
-        # 🔥 Run translation + voice in parallel
-        future_translate = executor.submit(do_translate, text, direction)
-        future_voice = executor.submit(create_voice, text, direction, gender)
+        # 🔥 Step 1: translate first
+        translated = do_translate(text, direction)
 
-        translated = future_translate.result()
-        audio = future_voice.result()
+        # 🔥 Step 2: generate voice FROM TRANSLATED TEXT (FIXED)
+        audio_filename = f"{uuid.uuid4().hex}.mp3"
+        audio_path = os.path.join(OUTPUT_FOLDER, audio_filename)
+
+        create_voice(translated, direction, gender, audio_path)
+
+        # 🔥 Step 3: return full URL
+        audio_url = f"{BASE_URL}/audio/{audio_filename}"
 
         return jsonify({
             "translated": translated,
-            "audio": audio
+            "audio": audio_url
         })
 
     except Exception as e:
@@ -65,7 +76,7 @@ def translate_audio():
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         audio_file.save(filepath)
 
-        # 1️⃣ Transcribe first
+        # 🔥 Step 1: transcribe
         text = transcribe_audio(filepath, direction)
 
         if not text or "No speech" in text:
@@ -74,17 +85,22 @@ def translate_audio():
                 "audio": None
             })
 
-        # 2️⃣ Parallel translate + voice
-        future_translate = executor.submit(do_translate, text, direction)
-        future_voice = executor.submit(create_voice, text, direction, gender)
+        # 🔥 Step 2: translate
+        translated = do_translate(text, direction)
 
-        translated = future_translate.result()
-        audio = future_voice.result()
+        # 🔥 Step 3: voice from translated text
+        audio_filename = f"{uuid.uuid4().hex}.mp3"
+        audio_path = os.path.join(OUTPUT_FOLDER, audio_filename)
+
+        create_voice(translated, direction, gender, audio_path)
+
+        # 🔥 Step 4: return FULL URL
+        audio_url = f"{BASE_URL}/audio/{audio_filename}"
 
         return jsonify({
             "original": text,
             "translated": translated,
-            "audio": audio
+            "audio": audio_url
         })
 
     except Exception as e:
