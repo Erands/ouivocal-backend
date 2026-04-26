@@ -5,3 +5,4 @@ faster-whisper
 pydub
 python-docx
 pdfplumber
+deep-translator
