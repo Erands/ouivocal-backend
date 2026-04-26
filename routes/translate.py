@@ -9,14 +9,17 @@ from services.voice_service import create_voice
 
 translate_bp = Blueprint("translate", __name__)
 
-# 🔥 Thread pool (optimized)
+# 🔥 Thread pool (faster processing)
 executor = ThreadPoolExecutor(max_workers=3)
 
 UPLOAD_FOLDER = "uploads"
-OUTPUT_FOLDER = "outputs"
-
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+OUTPUT_FOLDER = "outputs"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+# 🔥 IMPORTANT (YOUR BACKEND DOMAIN)
+BASE_URL = os.environ.get("BASE_URL", "https://ouivocal-api.onrender.com")
 
 
 # =========================
@@ -34,21 +37,14 @@ def translate_text():
         if not text:
             return jsonify({"error": "No text provided"}), 400
 
-        # 🔥 Step 1: Translate (FAST)
+        # 🔥 1. TRANSLATE FIRST (FAST)
         translated = do_translate(text, direction)
 
-        # 🔥 Step 2: Generate audio file
-        filename = f"{uuid.uuid4().hex}.mp3"
-        audio_path = os.path.join(OUTPUT_FOLDER, filename)
+        # 🔥 2. GENERATE VOICE (AFTER TRANSLATION)
+        audio_filename = create_voice(translated, direction, gender)
 
-        audio_file = create_voice(translated, direction, gender, audio_path)
-
-        # 🔥 Step 3: Return safe response
-        audio_url = None
-        if audio_file:
-            BASE_URL = os.environ.get("BASE_URL", "https://ouivocal-api.onrender.com")
-
-            audio_url = f"{BASE_URL}/audio/{filename}"
+        # 🔥 3. BUILD FULL URL
+        audio_url = f"{BASE_URL}/audio/{audio_filename}" if audio_filename else None
 
         return jsonify({
             "translated": translated,
@@ -56,7 +52,7 @@ def translate_text():
         })
 
     except Exception as e:
-        print("❌ Text error:", e)
+        print("❌ TEXT ERROR:", e)
         return jsonify({"error": "Translation failed"}), 500
 
 
@@ -73,12 +69,12 @@ def translate_audio():
         if not audio_file:
             return jsonify({"error": "No audio file"}), 400
 
-        # 🔥 Save uploaded file
+        # 🔥 SAVE INPUT AUDIO
         filename = f"{uuid.uuid4().hex}.webm"
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         audio_file.save(filepath)
 
-        # 🔥 Step 1: Transcribe
+        # 🔥 1. TRANSCRIBE
         text = transcribe_audio(filepath, direction)
 
         if not text or "No speech" in text:
@@ -87,18 +83,14 @@ def translate_audio():
                 "audio": None
             })
 
-        # 🔥 Step 2: Translate
+        # 🔥 2. TRANSLATE
         translated = do_translate(text, direction)
 
-        # 🔥 Step 3: Generate voice
-        out_name = f"{uuid.uuid4().hex}.mp3"
-        audio_path = os.path.join(OUTPUT_FOLDER, out_name)
+        # 🔥 3. GENERATE VOICE
+        audio_filename = create_voice(translated, direction, gender)
 
-        audio_file = create_voice(translated, direction, gender, audio_path)
-
-        audio_url = None
-        if audio_file:
-            audio_url = f"/audio/{out_name}"
+        # 🔥 4. BUILD FULL URL
+        audio_url = f"{BASE_URL}/audio/{audio_filename}" if audio_filename else None
 
         return jsonify({
             "original": text,
@@ -107,5 +99,5 @@ def translate_audio():
         })
 
     except Exception as e:
-        print("❌ Audio error:", e)
+        print("❌ AUDIO ERROR:", e)
         return jsonify({"error": "Audio failed"}), 500
