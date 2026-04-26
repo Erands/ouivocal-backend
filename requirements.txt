@@ -1,0 +1,7 @@
+flask
+flask-cors
+websockets
+faster-whisper
+pydub
+python-docx
+pdfplumber
