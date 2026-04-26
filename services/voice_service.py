@@ -1,33 +1,24 @@
 import edge_tts
-import uuid
 import asyncio
-import os
 
-UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# 🔥 FAST VOICE SELECTION
+def get_voice(direction, gender):
 
-
-# 🔊 ASYNC VOICE GENERATION
-async def generate_voice(text, voice, filename):
-    communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(filename)
+    if direction == "en-fr":
+        return "fr-FR-HenriNeural" if gender == "male" else "fr-FR-DeniseNeural"
+    else:
+        return "en-US-GuyNeural" if gender == "male" else "en-US-JennyNeural"
 
 
-def create_voice(text, direction, gender):
-    try:
-        filename = f"{UPLOAD_FOLDER}/{uuid.uuid4().hex}.mp3"
+# 🔥 MAIN FUNCTION (UPDATED)
+def create_voice(text, direction, gender, output_path):
 
-        # 🎯 FIXED VOICE SELECTION
-        if gender == "female":
-            voice = "en-US-JennyNeural" if "en" in direction else "fr-FR-DeniseNeural"
-        else:
-            voice = "en-US-GuyNeural" if "en" in direction else "fr-FR-HenriNeural"
+    voice = get_voice(direction, gender)
 
-        asyncio.run(generate_voice(text, voice, filename))
+    async def run():
+        communicate = edge_tts.Communicate(text, voice)
+        await communicate.save(output_path)
 
-        # 🔗 RETURN PUBLIC URL
-        return f"https://ouivocal-api.onrender.com/{filename}"
+    asyncio.run(run())
 
-    except Exception as e:
-        print("Voice error:", e)
-        return None
+    return output_path
