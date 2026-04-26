@@ -46,7 +46,9 @@ def translate_text():
         # 🔥 Step 3: Return safe response
         audio_url = None
         if audio_file:
-            audio_url = f"/audio/{filename}"
+            BASE_URL = os.environ.get("BASE_URL", "https://ouivocal-api.onrender.com")
+
+            audio_url = f"{BASE_URL}/audio/{filename}"
 
         return jsonify({
             "translated": translated,
