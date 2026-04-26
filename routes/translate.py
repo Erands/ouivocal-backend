@@ -4,7 +4,6 @@ from docx import Document
 import pdfplumber
 
 from services.translation_service import do_translate
-from services.voice_service import create_voice
 from services.audio_service import transcribe_audio
 
 translate_bp = Blueprint("translate", __name__)
@@ -12,12 +11,11 @@ translate_bp = Blueprint("translate", __name__)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# 🔥 FIXED: dynamic base URL (works locally + production)
 BASE_URL = os.environ.get("BASE_URL", "http://127.0.0.1:5000")
 
 
 # =========================
-# 🎤 AUDIO TRANSLATION
+# 🎤 AUDIO TRANSLATION (FAST)
 # =========================
 @translate_bp.route("/translate", methods=["POST"])
 def translate_audio():
@@ -41,15 +39,11 @@ def translate_audio():
 
         translated = do_translate(text, direction)
 
-        filename = f"{uuid.uuid4().hex}.mp3"
-        out = os.path.join(UPLOAD_FOLDER, filename)
-
-        create_voice(translated, direction, "female", out)
-
+        # 🔥 NO VOICE GENERATION (FAST RESPONSE)
         return jsonify({
             "original": text,
             "translated": translated,
-            "audio": f"{BASE_URL}/uploads/{filename}"
+            "audio": None
         })
 
     except Exception as e:
@@ -58,7 +52,7 @@ def translate_audio():
 
 
 # =========================
-# ✍️ TEXT TRANSLATION
+# ✍️ TEXT TRANSLATION (FAST)
 # =========================
 @translate_bp.route("/translate-text", methods=["POST"])
 def translate_text():
@@ -73,15 +67,11 @@ def translate_text():
 
         translated = do_translate(text, direction)
 
-        filename = f"{uuid.uuid4().hex}.mp3"
-        out = os.path.join(UPLOAD_FOLDER, filename)
-
-        create_voice(translated, direction, "female", out)
-
+        # 🔥 NO VOICE GENERATION
         return jsonify({
             "original": text,
             "translated": translated,
-            "audio": f"{BASE_URL}/uploads/{filename}"
+            "audio": None
         })
 
     except Exception as e:
@@ -145,7 +135,7 @@ def translate_doc():
 
 
 # =========================
-# 🔥 LIVE TRANSLATION
+# 🔥 LIVE TRANSLATION (FAST)
 # =========================
 @translate_bp.route("/live-translate", methods=["POST"])
 def live_translate():
@@ -174,19 +164,11 @@ def live_translate():
             print("TRANSLATE ERROR:", e)
             return jsonify({"error": "Translate failed"}), 200
 
-        filename = f"{uuid.uuid4().hex}.mp3"
-        out = os.path.join(UPLOAD_FOLDER, filename)
-
-        try:
-            create_voice(translated, direction, "female", out)
-        except Exception as e:
-            print("VOICE ERROR:", e)
-            return jsonify({"error": "Voice failed"}), 200
-
+        # 🔥 NO VOICE GENERATION
         return jsonify({
             "text": text,
             "translated": translated,
-            "audio": f"{BASE_URL}/uploads/{filename}"
+            "audio": None
         })
 
     except Exception as e:
@@ -195,7 +177,7 @@ def live_translate():
 
 
 # =========================
-# 📥 SERVE FILES
+# 📥 SERVE FILES (kept for future use)
 # =========================
 @translate_bp.route("/uploads/<filename>")
 def serve_file(filename):
