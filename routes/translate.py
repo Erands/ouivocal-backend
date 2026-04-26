@@ -9,21 +9,22 @@ from services.voice_service import create_voice
 
 translate_bp = Blueprint("translate", __name__)
 
-# 🔥 Thread pool (faster processing)
+# 🔥 THREAD POOL (FAST)
 executor = ThreadPoolExecutor(max_workers=3)
 
+# 📁 FOLDERS
 UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 OUTPUT_FOLDER = "outputs"
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-# 🔥 IMPORTANT (YOUR BACKEND DOMAIN)
-BASE_URL = os.environ.get("BASE_URL", "https://ouivocal-api.onrender.com")
+# 🔗 YOUR BACKEND URL (IMPORTANT)
+BASE_URL = "https://ouivocal-api.onrender.com"
 
 
 # =========================
-# TEXT TRANSLATION
+# TEXT TRANSLATION (FAST)
 # =========================
 @translate_bp.route("/translate", methods=["POST"])
 def translate_text():
@@ -37,14 +38,17 @@ def translate_text():
         if not text:
             return jsonify({"error": "No text provided"}), 400
 
-        # 🔥 1. TRANSLATE FIRST (FAST)
+        # 🔥 TRANSLATE FIRST (FAST)
         translated = do_translate(text, direction)
 
-        # 🔥 2. GENERATE VOICE (AFTER TRANSLATION)
-        audio_filename = create_voice(translated, direction, gender)
+        # 🔥 GENERATE AUDIO FILE
+        filename = f"{uuid.uuid4().hex}.mp3"
+        output_path = os.path.join(OUTPUT_FOLDER, filename)
 
-        # 🔥 3. BUILD FULL URL
-        audio_url = f"{BASE_URL}/audio/{audio_filename}" if audio_filename else None
+        audio_file = create_voice(translated, direction, gender, output_path)
+
+        # 🔥 RETURN FULL URL
+        audio_url = f"{BASE_URL}/audio/{filename}" if audio_file else None
 
         return jsonify({
             "translated": translated,
@@ -52,12 +56,12 @@ def translate_text():
         })
 
     except Exception as e:
-        print("❌ TEXT ERROR:", e)
+        print("Text error:", e)
         return jsonify({"error": "Translation failed"}), 500
 
 
 # =========================
-# AUDIO TRANSLATION
+# AUDIO TRANSLATION (NORMAL MODE)
 # =========================
 @translate_bp.route("/audio", methods=["POST"])
 def translate_audio():
@@ -69,12 +73,12 @@ def translate_audio():
         if not audio_file:
             return jsonify({"error": "No audio file"}), 400
 
-        # 🔥 SAVE INPUT AUDIO
+        # 💾 SAVE AUDIO
         filename = f"{uuid.uuid4().hex}.webm"
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         audio_file.save(filepath)
 
-        # 🔥 1. TRANSCRIBE
+        # 🎧 TRANSCRIBE
         text = transcribe_audio(filepath, direction)
 
         if not text or "No speech" in text:
@@ -83,14 +87,16 @@ def translate_audio():
                 "audio": None
             })
 
-        # 🔥 2. TRANSLATE
+        # 🌍 TRANSLATE
         translated = do_translate(text, direction)
 
-        # 🔥 3. GENERATE VOICE
-        audio_filename = create_voice(translated, direction, gender)
+        # 🔊 CREATE AUDIO
+        out_name = f"{uuid.uuid4().hex}.mp3"
+        out_path = os.path.join(OUTPUT_FOLDER, out_name)
 
-        # 🔥 4. BUILD FULL URL
-        audio_url = f"{BASE_URL}/audio/{audio_filename}" if audio_filename else None
+        audio_file = create_voice(translated, direction, gender, out_path)
+
+        audio_url = f"{BASE_URL}/audio/{out_name}" if audio_file else None
 
         return jsonify({
             "original": text,
@@ -99,5 +105,41 @@ def translate_audio():
         })
 
     except Exception as e:
-        print("❌ AUDIO ERROR:", e)
+        print("Audio error:", e)
         return jsonify({"error": "Audio failed"}), 500
+
+
+# =========================
+# ⚡ LIVE MODE (ULTRA FAST - NO AUDIO)
+# =========================
+@translate_bp.route("/audio-live", methods=["POST"])
+def translate_audio_live():
+    try:
+        audio_file = request.files.get("audio")
+        direction = request.form.get("direction")
+
+        if not audio_file:
+            return jsonify({"translated": ""})
+
+        # 💾 SAVE SMALL CHUNK
+        filename = f"{uuid.uuid4().hex}.webm"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        audio_file.save(filepath)
+
+        # 🎧 TRANSCRIBE (FAST MODEL)
+        text = transcribe_audio(filepath, direction)
+
+        if not text:
+            return jsonify({"translated": ""})
+
+        # 🌍 TRANSLATE ONLY (NO VOICE = FAST)
+        translated = do_translate(text, direction)
+
+        return jsonify({
+            "original": text,
+            "translated": translated
+        })
+
+    except Exception as e:
+        print("Live error:", e)
+        return jsonify({"translated": ""})
