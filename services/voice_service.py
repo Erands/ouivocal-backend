@@ -3,12 +3,11 @@ import asyncio
 import os
 import uuid
 
-# 🔥 Ensure output folder exists
 OUTPUT_FOLDER = "outputs"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 
-# ✅ Voice selector (stable)
+# ✅ Voice selector
 def get_voice(direction, gender):
     if direction == "en-fr":
         return "fr-FR-HenriNeural" if gender == "male" else "fr-FR-DeniseNeural"
@@ -16,24 +15,16 @@ def get_voice(direction, gender):
         return "en-US-GuyNeural" if gender == "male" else "en-US-JennyNeural"
 
 
-# ✅ Proper async runner (fixes empty/invalid files)
+# ✅ Async runner (FIXED — NO background tasks)
 def run_async(coro):
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            return asyncio.create_task(coro)
-    except RuntimeError:
-        pass
-
     return asyncio.run(coro)
 
 
-# ✅ MAIN FUNCTION (PRODUCTION SAFE)
+# ✅ MAIN FUNCTION (FINAL FIX)
 def create_voice(text, direction, gender):
 
     try:
-        # 🔥 Generate unique filename
-        filename = f"{uuid.uuid4().hex}.wav"
+        filename = f"{uuid.uuid4().hex}.mp3"   # 🔥 MP3 (browser safe)
         output_path = os.path.join(OUTPUT_FOLDER, filename)
 
         voice = get_voice(direction, gender)
@@ -42,10 +33,10 @@ def create_voice(text, direction, gender):
             communicate = edge_tts.Communicate(text, voice)
             await communicate.save(output_path)
 
-        # 🔥 Run TTS
+        # 🔥 MUST BLOCK until finished
         run_async(generate())
 
-        # 🔥 Validate file (VERY IMPORTANT)
+        # 🔥 VERIFY FILE
         if not os.path.exists(output_path):
             print("❌ Audio not created")
             return None
@@ -53,12 +44,11 @@ def create_voice(text, direction, gender):
         size = os.path.getsize(output_path)
 
         if size < 1000:
-            print("❌ Audio too small / invalid:", size)
+            print("❌ Audio too small:", size)
             return None
 
-        print("✅ Audio created:", output_path, "Size:", size)
+        print("✅ Audio created:", filename, "Size:", size)
 
-        # 🔥 RETURN ONLY FILENAME (NOT FULL PATH)
         return filename
 
     except Exception as e:
