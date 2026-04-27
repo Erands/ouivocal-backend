@@ -1,5 +1,75 @@
+# =========================
+# ENVIRONMENT
+# =========================
 venv/
+env/
+ENV/
+.env
+.env.*
+
+# =========================
+# PYTHON CACHE
+# =========================
 __pycache__/
 *.pyc
-.env
+*.pyo
+*.pyd
+.Python
+
+# =========================
+# DISTRIBUTION / BUILD
+# =========================
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# =========================
+# LOGS
+# =========================
+*.log
+logs/
+
+# =========================
+# UPLOADS / USER FILES
+# =========================
 uploads/
+media/
+tmp/
+temp/
+
+# =========================
+# SYSTEM FILES (MAC + WINDOWS)
+# =========================
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# =========================
+# IDE / EDITORS
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# TEST / COVERAGE
+# =========================
+.pytest_cache/
+.coverage
+htmlcov/
+
+# =========================
+# RENDER / DEPLOYMENT
+# =========================
+*.sqlite3
+db.sqlite3
+
+# =========================
+# SECURITY (NEVER COMMIT THESE)
+# =========================
+*.pem
+*.key
+*.crt
