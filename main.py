@@ -43,3 +43,7 @@ PORT = int(os.environ.get("PORT", 10000))
 if __name__ == "__main__":
     print(f"🚀 Starting Flask on port {PORT}")
     app.run(host="0.0.0.0", port=PORT)
+
+    app = Flask(__name__)
+app.config["DEBUG"] = True   # 🔥 ADD THIS LINE
+CORS(app)

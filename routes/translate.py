@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 import os
 import uuid
+import traceback
 
 from services.audio_service import transcribe_audio
 from services.translation_service import do_translate
@@ -8,7 +9,7 @@ from services.voice_service import create_voice
 
 translate_bp = Blueprint("translate", __name__)
 
-# ✅ ensure folders exist
+# ✅ FOLDERS
 UPLOAD_FOLDER = "uploads"
 OUTPUT_FOLDER = "outputs"
 
@@ -29,18 +30,23 @@ def translate_text():
         gender = data.get("gender", "female")
 
         if not text:
-            return jsonify({"error": "No text"}), 400
+            return jsonify({"error": "No text provided"}), 400
 
-        # 🔥 translate
+        # ✅ TRANSLATE
         translated = do_translate(text, direction)
 
-        # 🔥 create audio
-        filename = f"{uuid.uuid4().hex}.mp3"
-        output_path = os.path.join(OUTPUT_FOLDER, filename)
+        # ✅ GENERATE AUDIO
+        audio_filename = f"{uuid.uuid4().hex}.mp3"
+        output_path = os.path.join(OUTPUT_FOLDER, audio_filename)
 
         create_voice(translated, direction, gender, output_path)
 
-        audio_url = f"https://ouivocal-api.onrender.com/audio/{filename}"
+        # ✅ VERIFY AUDIO EXISTS
+        if not os.path.exists(output_path) or os.path.getsize(output_path) < 1000:
+            print("❌ Audio not generated properly")
+            audio_url = None
+        else:
+            audio_url = f"https://ouivocal-api.onrender.com/audio/{audio_filename}"
 
         return jsonify({
             "translated": translated,
@@ -48,8 +54,9 @@ def translate_text():
         })
 
     except Exception as e:
-        print("❌ TEXT ERROR:", e)
-        return jsonify({"error": "Server failed"}), 500
+        print("❌ TEXT ERROR:")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 # =========================
@@ -63,31 +70,38 @@ def translate_audio():
         gender = request.form.get("gender", "female")
 
         if not audio_file:
-            return jsonify({"error": "No audio"}), 400
+            return jsonify({"error": "No audio file"}), 400
 
+        # ✅ SAVE AUDIO INPUT
         filename = f"{uuid.uuid4().hex}.webm"
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         audio_file.save(filepath)
 
-        # 🔥 transcribe
+        # ✅ TRANSCRIBE
         text = transcribe_audio(filepath, direction)
 
-        if not text:
+        if not text or text.strip() == "":
             return jsonify({
+                "original": "",
                 "translated": "⚠️ No speech detected",
                 "audio": None
             })
 
-        # 🔥 translate
+        # ✅ TRANSLATE
         translated = do_translate(text, direction)
 
-        # 🔥 create voice
+        # ✅ GENERATE AUDIO
         audio_filename = f"{uuid.uuid4().hex}.mp3"
         output_path = os.path.join(OUTPUT_FOLDER, audio_filename)
 
         create_voice(translated, direction, gender, output_path)
 
-        audio_url = f"https://ouivocal-api.onrender.com/audio/{audio_filename}"
+        # ✅ VERIFY AUDIO
+        if not os.path.exists(output_path) or os.path.getsize(output_path) < 1000:
+            print("❌ Audio failed")
+            audio_url = None
+        else:
+            audio_url = f"https://ouivocal-api.onrender.com/audio/{audio_filename}"
 
         return jsonify({
             "original": text,
@@ -96,13 +110,50 @@ def translate_audio():
         })
 
     except Exception as e:
-        print("❌ AUDIO ERROR:", e)
-        return jsonify({"error": "Audio failed"}), 500
+        print("❌ AUDIO ERROR:")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 # =========================
-# LIVE MODE (IMPORTANT)
+# LIVE MODE (REAL-TIME)
 # =========================
 @translate_bp.route("/audio-live", methods=["POST"])
 def translate_audio_live():
-    return translate_audio()
+    try:
+        audio_file = request.files.get("audio")
+        direction = request.form.get("direction")
+        gender = request.form.get("gender", "female")
+
+        if not audio_file:
+            return jsonify({"error": "No audio file"}), 400
+
+        # ✅ SAVE SMALL CHUNK
+        filename = f"{uuid.uuid4().hex}.webm"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        audio_file.save(filepath)
+
+        # ✅ QUICK TRANSCRIBE
+        text = transcribe_audio(filepath, direction)
+
+        if not text:
+            return jsonify({
+                "original": "",
+                "translated": "",
+                "audio": None
+            })
+
+        # ✅ QUICK TRANSLATE
+        translated = do_translate(text, direction)
+
+        # 🚫 NO AUDIO IN LIVE MODE (for speed)
+        return jsonify({
+            "original": text,
+            "translated": translated,
+            "audio": None
+        })
+
+    except Exception as e:
+        print("❌ LIVE ERROR:")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
