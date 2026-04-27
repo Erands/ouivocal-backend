@@ -23,11 +23,15 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 @translate_bp.route("/translate", methods=["POST"])
 def translate_text():
     try:
-        data = request.json
+        data = request.json or {}
 
         text = data.get("text")
-        direction = data.get("direction")
-        gender = data.get("gender", "female")
+        direction = data.get("direction") or "en-fr"
+        gender = data.get("gender") or "female"
+
+        print("🟢 TEXT INPUT:", text)
+        print("🟢 DIRECTION:", direction)
+        print("🟢 GENDER:", gender)
 
         if not text:
             return jsonify({"error": "No text provided"}), 400
@@ -41,9 +45,9 @@ def translate_text():
 
         create_voice(translated, direction, gender, output_path)
 
-        # ✅ VERIFY AUDIO EXISTS
+        # ✅ VERIFY AUDIO
         if not os.path.exists(output_path) or os.path.getsize(output_path) < 1000:
-            print("❌ Audio not generated properly")
+            print("❌ Audio not generated or too small")
             audio_url = None
         else:
             audio_url = f"https://ouivocal-api.onrender.com/audio/{audio_filename}"
@@ -66,19 +70,24 @@ def translate_text():
 def translate_audio():
     try:
         audio_file = request.files.get("audio")
-        direction = request.form.get("direction")
-        gender = request.form.get("gender", "female")
+        direction = request.form.get("direction") or "en-fr"
+        gender = request.form.get("gender") or "female"
+
+        print("🟢 AUDIO RECEIVED")
+        print("🟢 DIRECTION:", direction)
 
         if not audio_file:
             return jsonify({"error": "No audio file"}), 400
 
-        # ✅ SAVE AUDIO INPUT
+        # ✅ SAVE INPUT AUDIO
         filename = f"{uuid.uuid4().hex}.webm"
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         audio_file.save(filepath)
 
         # ✅ TRANSCRIBE
         text = transcribe_audio(filepath, direction)
+
+        print("🟢 TRANSCRIBED:", text)
 
         if not text or text.strip() == "":
             return jsonify({
@@ -116,14 +125,13 @@ def translate_audio():
 
 
 # =========================
-# LIVE MODE (REAL-TIME)
+# LIVE MODE (FAST RESPONSE)
 # =========================
 @translate_bp.route("/audio-live", methods=["POST"])
 def translate_audio_live():
     try:
         audio_file = request.files.get("audio")
-        direction = request.form.get("direction")
-        gender = request.form.get("gender", "female")
+        direction = request.form.get("direction") or "en-fr"
 
         if not audio_file:
             return jsonify({"error": "No audio file"}), 400
@@ -133,7 +141,7 @@ def translate_audio_live():
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         audio_file.save(filepath)
 
-        # ✅ QUICK TRANSCRIBE
+        # ✅ FAST TRANSCRIBE
         text = transcribe_audio(filepath, direction)
 
         if not text:
@@ -143,10 +151,9 @@ def translate_audio_live():
                 "audio": None
             })
 
-        # ✅ QUICK TRANSLATE
+        # ✅ FAST TRANSLATE
         translated = do_translate(text, direction)
 
-        # 🚫 NO AUDIO IN LIVE MODE (for speed)
         return jsonify({
             "original": text,
             "translated": translated,
