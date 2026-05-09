@@ -30,7 +30,7 @@ def serve_audio(filename):
 # =========================
 @app.route("/")
 def home():
-    return "OuiVocal API Running 🚀"
+    return "OuiVocal Backend Live 🚀"
 
 # =========================
 # PORT (RENDER COMPATIBLE)
