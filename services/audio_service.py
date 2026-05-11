@@ -1,24 +1,34 @@
 from faster_whisper import WhisperModel
 
-# 🔥 FAST + LIGHT MODEL
+# ✅ BETTER MODEL FOR ACCURATE TRANSCRIPTION
+# small = good balance of speed + accuracy
 model = WhisperModel(
-    "tiny",
+    "small",
     compute_type="int8",
-    cpu_threads=2
+    cpu_threads=4
 )
+
 
 def transcribe_audio(path, direction):
     try:
-        source_lang = "fr" if direction == "fr-en" else "en"
 
-        segments, _ = model.transcribe(
+        # ✅ AUTO-DETECT LANGUAGE
+        # ✅ REMOVE SILENCE/NOISE
+        # ✅ BETTER ACCURACY
+        segments, info = model.transcribe(
             path,
-            language=source_lang,
-            beam_size=1  # 🔥 speed boost
+            beam_size=5,
+            vad_filter=True
         )
 
-        text = " ".join([s.text for s in segments]).strip()
+        # ✅ COMBINE TRANSCRIBED SEGMENTS
+        text = " ".join([segment.text for segment in segments]).strip()
 
+        # ✅ DEBUG LOG
+        print("Detected language:", info.language)
+        print("Transcribed text:", text)
+
+        # ✅ EMPTY CHECK
         if not text:
             return "⚠️ No speech detected"
 
