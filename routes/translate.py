@@ -14,7 +14,7 @@ translate_bp = Blueprint("translate", __name__)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-BASE_URL = "https://ouivocal-api.onrender.com"
+BASE_URL = "https://ouivocal-backend-production.up.railway.app"
 
 
 # =========================
