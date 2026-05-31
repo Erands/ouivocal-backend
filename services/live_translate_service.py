@@ -1,54 +1,73 @@
-import speech_recognition as sr
+from faster_whisper import WhisperModel
 from pydub import AudioSegment
-from gtts import gTTS
-import uuid
 import os
 
 from services.translation_service import do_translate
 
-UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
+# Load ONCE when server starts
+model = WhisperModel(
+    "small",
+    compute_type="int8",
+    cpu_threads=2
+)
 
 def process_live_audio(file_path, direction):
 
-    # convert to wav
     wav_file = file_path.replace(".webm", ".wav")
 
-    sound = AudioSegment.from_file(file_path, format="webm")
-    sound = sound + 20
-    sound = sound.set_channels(1).set_frame_rate(16000)
-    sound.export(wav_file, format="wav")
-
-    # speech recognition
-    r = sr.Recognizer()
-
-    with sr.AudioFile(wav_file) as source:
-        r.adjust_for_ambient_noise(source, duration=0.3)
-        audio = r.record(source)
-
     try:
-        text = r.recognize_google(audio)
-    except:
-        text = ""
 
-    if not text:
-        return None
+        # Convert to wav
+        sound = AudioSegment.from_file(file_path, format="webm")
+        sound = sound.set_channels(1)
+        sound = sound.set_frame_rate(16000)
+        sound.export(wav_file, format="wav")
 
-    # translate
-    translated = do_translate(text, direction)
+        source_lang = "fr" if direction == "fr-en" else "en"
 
-    # text to speech
-    output_file = os.path.join(UPLOAD_FOLDER, f"{uuid.uuid4().hex}.mp3")
+        segments, _ = model.transcribe(
+            wav_file,
+            language=source_lang,
+            beam_size=1
+        )
 
-    tts = gTTS(text=translated, lang="en" if direction == "fr-en" else "fr")
-    tts.save(output_file)
+        text = " ".join(
+            segment.text for segment in segments
+        ).strip()
 
-    # cleanup
-    try:
-        os.remove(file_path)
-        os.remove(wav_file)
-    except:
-        pass
+        if not text:
+            return {
+                "original": "",
+                "translated": ""
+            }
 
-    return output_file
+        translated = do_translate(
+            text,
+            direction
+        )
+
+        return {
+            "original": text,
+            "translated": translated
+        }
+
+    except Exception as e:
+
+        print("LIVE ERROR:", e)
+
+        return {
+            "original": "",
+            "translated": ""
+        }
+
+    finally:
+
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
+            if os.path.exists(wav_file):
+                os.remove(wav_file)
+
+        except:
+            pass

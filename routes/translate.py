@@ -140,6 +140,67 @@ def translate_audio():
 # =========================
 @translate_bp.route("/audio-live", methods=["POST"])
 def translate_audio_live():
+
+    filepath = None
+
+    try:
+
+        audio_file = request.files.get("audio")
+        direction = request.form.get("direction")
+
+        if not audio_file:
+            return jsonify({
+                "original": "",
+                "translated": "",
+                "audio": None
+            })
+
+        filename = f"{uuid.uuid4().hex}.webm"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+        audio_file.save(filepath)
+
+        text = transcribe_audio(filepath, direction)
+
+        if (
+            not text or
+            "No speech" in text or
+            "processing failed" in text
+        ):
+            return jsonify({
+                "original": "",
+                "translated": "",
+                "audio": None
+            })
+
+        translated = do_translate(
+            text,
+            direction
+        )
+
+        return jsonify({
+            "original": text,
+            "translated": translated,
+            "audio": None
+        })
+
+    except Exception as e:
+
+        print("LIVE ERROR:", e)
+
+        return jsonify({
+            "original": "",
+            "translated": "",
+            "audio": None
+        })
+
+    finally:
+
+        try:
+            if filepath and os.path.exists(filepath):
+                os.remove(filepath)
+        except:
+            pass
     try:
         audio_file = request.files.get("audio")
         direction = request.form.get("direction")
