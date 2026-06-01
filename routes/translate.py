@@ -140,70 +140,11 @@ def translate_audio():
 # =========================
 @translate_bp.route("/audio-live", methods=["POST"])
 def translate_audio_live():
-
-    filepath = None
-
     try:
 
         audio_file = request.files.get("audio")
         direction = request.form.get("direction")
-
-        if not audio_file:
-            return jsonify({
-                "original": "",
-                "translated": "",
-                "audio": None
-            })
-
-        filename = f"{uuid.uuid4().hex}.webm"
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-
-        audio_file.save(filepath)
-
-        text = transcribe_audio(filepath, direction)
-
-        if (
-            not text or
-            "No speech" in text or
-            "processing failed" in text
-        ):
-            return jsonify({
-                "original": "",
-                "translated": "",
-                "audio": None
-            })
-
-        translated = do_translate(
-            text,
-            direction
-        )
-
-        return jsonify({
-            "original": text,
-            "translated": translated,
-            "audio": None
-        })
-
-    except Exception as e:
-
-        print("LIVE ERROR:", e)
-
-        return jsonify({
-            "original": "",
-            "translated": "",
-            "audio": None
-        })
-
-    finally:
-
-        try:
-            if filepath and os.path.exists(filepath):
-                os.remove(filepath)
-        except:
-            pass
-    try:
-        audio_file = request.files.get("audio")
-        direction = request.form.get("direction")
+        gender = request.form.get("gender", "female")
 
         if not audio_file:
             return jsonify({
@@ -215,7 +156,7 @@ def translate_audio_live():
         filepath = os.path.join(UPLOAD_FOLDER, filename)
         audio_file.save(filepath)
 
-        # ⚡ FAST TRANSCRIBE
+        # TRANSCRIBE
         text = transcribe_audio(filepath, direction)
 
         if not text:
@@ -224,17 +165,35 @@ def translate_audio_live():
                 "audio": None
             })
 
-        # ⚡ FAST TRANSLATE
+        # TRANSLATE
         translated = do_translate(text, direction)
+
+        # GENERATE AUDIO
+        audio_url = None
+
+        try:
+
+            audio_filename = create_voice(
+                translated,
+                direction,
+                gender
+            )
+
+            if audio_filename:
+                audio_url = f"{BASE_URL}/audio/{audio_filename}"
+
+        except Exception as e:
+            print("❌ LIVE AUDIO ERROR:", e)
 
         return jsonify({
             "original": text,
             "translated": translated,
-            "audio": None
+            "audio": audio_url
         })
 
     except Exception as e:
         print("❌ LIVE ERROR:", e)
+
         return jsonify({
             "translated": "",
             "audio": None
