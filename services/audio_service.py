@@ -3,7 +3,7 @@ import time
 
 # Fast startup + low memory
 model = WhisperModel(
-    "small",
+    "medium",
     compute_type="int8",
     cpu_threads=2
 )
