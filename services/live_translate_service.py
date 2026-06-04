@@ -6,7 +6,7 @@ from services.translation_service import do_translate
 
 # Load ONCE when server starts
 model = WhisperModel(
-    "small",
+    "medium",
     compute_type="int8",
     cpu_threads=2
 )
