@@ -14,7 +14,12 @@ translate_bp = Blueprint("translate", __name__)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-BASE_URL = "https://api.ouivocal.erands.com.ng"
+import os
+
+BASE_URL = os.getenv(
+    "BASE_URL",
+    "https://api.ouivocal.erands.com.ng"
+)
 
 # =========================
 # TEXT TRANSLATION
