@@ -30,6 +30,8 @@ def _run(operation, success_status: int = 200):
         return jsonify(error="Identity service is unavailable"), 503
     except (ValidationError, ValueError):
         return jsonify(error="Invalid identity request"), 400
+    except LookupError:
+        return jsonify(error="Identity resource was not found"), 404
     except PermissionError:
         return jsonify(error="Invalid credentials"), 401
     return jsonify(result), success_status
@@ -78,6 +80,22 @@ def search_users():
     )
 
 
+@identity_bp.post("/conversations")
+def create_conversation():
+    try:
+        current_user_id = _current_user_id()
+    except IdentityConfigurationError:
+        return jsonify(error="Identity service is unavailable"), 503
+    except PermissionError:
+        return jsonify(error="Authentication is required"), 401
+    return _run(
+        lambda repo: identity_service.create_direct_conversation(
+            repo, current_user_id, _request_data()
+        ),
+        201,
+    )
+
+
 def inactive():
     return jsonify(error="Identity operation is not activated"), 503
 
@@ -88,7 +106,7 @@ for rule, methods in [
     ("/ouivocal-id/check", ["GET"]),
     ("/users/<ouivocal_id>", ["GET"]),
     ("/me/languages", ["GET", "PUT"]),
-    ("/conversations", ["GET", "POST"]),
+    ("/conversations", ["GET"]),
 ]:
     identity_bp.add_url_rule(
         rule,

@@ -43,6 +43,46 @@ class Repository:
             )
             return cursor.fetchall()
 
+    def public_active_user(self, user_id):
+        return self.one(
+            "SELECT id, ouivocal_id, full_name, avatar_url, identity_verified_at "
+            "FROM users WHERE id=%s AND account_status='active'",
+            (user_id,),
+        )
+
+    def direct_with_preferences(self, creator, other, source_language, target_language):
+        """Return the canonical direct conversation, creating it atomically if absent."""
+        low, high = canonical_pair(creator, other)
+        conversation_id = new_id()
+        with self.conn.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO conversations("
+                "id,created_by_user_id,direct_lower_user_id,direct_higher_user_id,"
+                "default_source_language,default_target_language"
+                ") VALUES(%s,%s,%s,%s,%s,%s) "
+                "ON CONFLICT(direct_lower_user_id,direct_higher_user_id) DO NOTHING "
+                "RETURNING id",
+                (conversation_id, creator, low, high, source_language, target_language),
+            )
+            created = cursor.fetchone()
+            if created:
+                cursor.execute(
+                    "INSERT INTO conversation_members(id,conversation_id,user_id,member_role) "
+                    "VALUES(%s,%s,%s,'owner'),(%s,%s,%s,'member')",
+                    (new_id(), conversation_id, creator, new_id(), conversation_id, other),
+                )
+                return created["id"], True
+
+            cursor.execute(
+                "SELECT id FROM conversations "
+                "WHERE direct_lower_user_id=%s AND direct_higher_user_id=%s",
+                (low, high),
+            )
+            existing = cursor.fetchone()
+            if not existing:
+                raise RuntimeError("Direct conversation was not created")
+            return existing["id"], False
+
     def create_user(self, values):
         user_id = new_id()
         self.one(
