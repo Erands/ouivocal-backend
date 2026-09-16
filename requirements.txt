@@ -7,3 +7,6 @@ python-docx
 pdfplumber
 deep-translator
 edge-tts
+# Identity foundation (not installed or activated until PostgreSQL access is configured)
+psycopg[binary]>=3.2,<4
+PyJWT>=2.10,<3

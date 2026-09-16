@@ -1,5 +1,6 @@
 from flask import Flask, send_from_directory
 from flask_cors import CORS
+from routes.identity import identity_bp
 from routes.translate import translate_bp
 import os
 
@@ -17,6 +18,7 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 # REGISTER ROUTES
 # =========================
 app.register_blueprint(translate_bp)
+app.register_blueprint(identity_bp)
 
 # =========================
 # AUDIO SERVE ROUTE (FIXED POSITION)
