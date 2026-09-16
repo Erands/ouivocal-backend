@@ -32,6 +32,8 @@ def _run(operation, success_status: int = 200):
         return jsonify(error="Invalid identity request"), 400
     except LookupError:
         return jsonify(error="Identity resource was not found"), 404
+    except identity_service.AuthorizationError:
+        return jsonify(error="Identity action is not allowed"), 403
     except PermissionError:
         return jsonify(error="Invalid credentials"), 401
     return jsonify(result), success_status
@@ -94,6 +96,61 @@ def create_conversation():
         ),
         201,
     )
+
+
+@identity_bp.get("/contacts/<user_id>")
+def contact_relationship(user_id):
+    try:
+        current_user_id = _current_user_id()
+    except IdentityConfigurationError:
+        return jsonify(error="Identity service is unavailable"), 503
+    except PermissionError:
+        return jsonify(error="Authentication is required"), 401
+    return _run(lambda repo: identity_service.contact_relationship(repo, current_user_id, user_id))
+
+
+@identity_bp.post("/contact-requests")
+def create_contact_request():
+    try:
+        current_user_id = _current_user_id()
+    except IdentityConfigurationError:
+        return jsonify(error="Identity service is unavailable"), 503
+    except PermissionError:
+        return jsonify(error="Authentication is required"), 401
+    return _run(lambda repo: identity_service.create_contact_request(repo, current_user_id, _request_data()), 201)
+
+
+@identity_bp.get("/contact-requests/incoming")
+def incoming_contact_requests():
+    try:
+        current_user_id = _current_user_id()
+    except IdentityConfigurationError:
+        return jsonify(error="Identity service is unavailable"), 503
+    except PermissionError:
+        return jsonify(error="Authentication is required"), 401
+    return _run(lambda repo: identity_service.incoming_contact_requests(repo, current_user_id))
+
+
+@identity_bp.post("/contact-requests/<contact_id>/accept")
+def accept_contact_request(contact_id):
+    try:
+        current_user_id = _current_user_id()
+    except IdentityConfigurationError:
+        return jsonify(error="Identity service is unavailable"), 503
+    except PermissionError:
+        return jsonify(error="Authentication is required"), 401
+    return _run(lambda repo: identity_service.respond_to_contact_request(repo, current_user_id, contact_id, "accepted"))
+
+
+@identity_bp.post("/contact-requests/<contact_id>/reject")
+def reject_contact_request(contact_id):
+    try:
+        current_user_id = _current_user_id()
+    except IdentityConfigurationError:
+        return jsonify(error="Identity service is unavailable"), 503
+    except PermissionError:
+        return jsonify(error="Authentication is required"), 401
+    return _run(lambda repo: identity_service.respond_to_contact_request(repo, current_user_id, contact_id, "rejected"))
 
 
 def inactive():

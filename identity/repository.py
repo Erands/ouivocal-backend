@@ -50,6 +50,60 @@ class Repository:
             (user_id,),
         )
 
+    def contact_between(self, first_user_id, second_user_id):
+        low, high = canonical_pair(first_user_id, second_user_id)
+        return self.one(
+            "SELECT id, requester_user_id, addressee_user_id, relationship_status, accepted_at "
+            "FROM contacts WHERE lower_user_id=%s AND higher_user_id=%s",
+            (low, high),
+        )
+
+    def create_contact_request(self, requester_user_id, addressee_user_id):
+        low, high = canonical_pair(requester_user_id, addressee_user_id)
+        contact_id = new_id()
+        with self.conn.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO contacts("
+                "id,lower_user_id,higher_user_id,requester_user_id,addressee_user_id,relationship_status"
+                ") VALUES(%s,%s,%s,%s,%s,'pending') "
+                "ON CONFLICT(lower_user_id,higher_user_id) DO NOTHING "
+                "RETURNING id,requester_user_id,addressee_user_id,relationship_status,accepted_at",
+                (contact_id, low, high, requester_user_id, addressee_user_id),
+            )
+            created = cursor.fetchone()
+        if created:
+            return created, True
+        return self.contact_between(requester_user_id, addressee_user_id), False
+
+    def respond_to_contact_request(self, contact_id, addressee_user_id, status):
+        return self.one(
+            "UPDATE contacts SET relationship_status=%s, "
+            "accepted_at=CASE WHEN %s='accepted' THEN NOW() ELSE accepted_at END "
+            "WHERE id=%s AND addressee_user_id=%s AND relationship_status='pending' "
+            "RETURNING id,requester_user_id,addressee_user_id,relationship_status,accepted_at",
+            (status, status, contact_id, addressee_user_id),
+        )
+
+    def pending_contact_requests_for(self, addressee_user_id):
+        with self.conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT c.id AS contact_id,c.relationship_status,c.created_at,"
+                "u.id,u.ouivocal_id,u.full_name,u.avatar_url,u.identity_verified_at "
+                "FROM contacts c JOIN users u ON u.id=c.requester_user_id "
+                "WHERE c.addressee_user_id=%s AND c.relationship_status='pending' "
+                "AND u.account_status='active' ORDER BY c.created_at DESC,c.id",
+                (addressee_user_id,),
+            )
+            return cursor.fetchall()
+
+    def accepted_contact_exists(self, first_user_id, second_user_id):
+        low, high = canonical_pair(first_user_id, second_user_id)
+        return self.one(
+            "SELECT id FROM contacts WHERE lower_user_id=%s AND higher_user_id=%s "
+            "AND relationship_status='accepted'",
+            (low, high),
+        ) is not None
+
     def direct_with_preferences(self, creator, other, source_language, target_language):
         """Return the canonical direct conversation, creating it atomically if absent."""
         low, high = canonical_pair(creator, other)

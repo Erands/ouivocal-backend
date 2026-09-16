@@ -22,6 +22,7 @@ class ConversationServiceTests(unittest.TestCase):
         class Repository:
             def user(_, user_id): return {"id": user_id}
             def public_active_user(_, user_id): return participant
+            def accepted_contact_exists(_, creator, other): return True
             def direct_with_preferences(_, creator, other, source, target):
                 _.call = (creator, other, source, target)
                 return uuid4(), True
@@ -55,6 +56,19 @@ class ConversationServiceTests(unittest.TestCase):
         result = service.create_direct_conversation(repo, self.creator, {"participant_id": str(self.participant), "my_language": "en", "their_language": "fr"})
         self.assertEqual(result["conversation_id"], str(existing))
         self.assertFalse(result["created"])
+
+    def test_rejects_non_contacts_before_creating_a_conversation(self):
+        repo = self.repository(self.public_participant)
+        repo.accepted_contact_exists = lambda *_: False
+        with self.assertRaises(service.AuthorizationError):
+            service.create_direct_conversation(repo, self.creator, {"participant_id": str(self.participant), "my_language": "en", "their_language": "fr"})
+
+    def test_rejects_pending_and_rejected_contact_relationships(self):
+        for relationship_status in ("pending", "rejected"):
+            repo = self.repository(self.public_participant)
+            repo.accepted_contact_exists = lambda *_: False
+            with self.subTest(relationship_status=relationship_status), self.assertRaises(service.AuthorizationError):
+                service.create_direct_conversation(repo, self.creator, {"participant_id": str(self.participant), "my_language": "en", "their_language": "fr"})
 
 
 class ConversationRouteTests(unittest.TestCase):
