@@ -104,6 +104,56 @@ class Repository:
             (low, high),
         ) is not None
 
+    def direct_conversations_for(self, user_id):
+        with self.conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT c.id AS conversation_id,c.created_by_user_id,c.default_source_language,c.default_target_language,"
+                "last_message.id AS last_message_id,last_message.original_text AS last_message,"
+                "last_message.created_at AS last_message_at,"
+                "u.id,u.ouivocal_id,u.full_name,u.avatar_url,u.identity_verified_at "
+                "FROM conversation_members m JOIN conversations c ON c.id=m.conversation_id "
+                "LEFT JOIN LATERAL (SELECT id,original_text,created_at FROM conversation_messages "
+                "WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) last_message ON TRUE "
+                "JOIN users u ON u.id=CASE WHEN c.direct_lower_user_id=%s "
+                "THEN c.direct_higher_user_id ELSE c.direct_lower_user_id END "
+                "WHERE m.user_id=%s AND m.left_at IS NULL AND c.conversation_type='direct' "
+                "AND u.account_status='active' ORDER BY c.updated_at DESC,c.id",
+                (user_id, user_id),
+            )
+            return cursor.fetchall()
+
+    def conversation_for_member(self, conversation_id, user_id):
+        return self.one(
+            "SELECT c.id,c.created_by_user_id,c.default_source_language,c.default_target_language "
+            "FROM conversations c JOIN conversation_members m ON m.conversation_id=c.id "
+            "WHERE c.id=%s AND m.user_id=%s AND m.left_at IS NULL",
+            (conversation_id, user_id),
+        )
+
+    def conversation_messages_for_member(self, conversation_id, user_id, limit):
+        with self.conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT message.id,message.sender_user_id,message.original_text,message.translated_text,"
+                "message.source_language,message.target_language,message.created_at "
+                "FROM conversation_messages message "
+                "JOIN conversation_members member ON member.conversation_id=message.conversation_id "
+                "WHERE message.conversation_id=%s AND member.user_id=%s AND member.left_at IS NULL "
+                "ORDER BY message.created_at ASC,message.id ASC LIMIT %s",
+                (conversation_id, user_id, limit),
+            )
+            return cursor.fetchall()
+
+    def create_conversation_message(self, conversation_id, sender_user_id, original_text,
+                                    translated_text, source_language, target_language):
+        return self.one(
+            "INSERT INTO conversation_messages("
+            "id,conversation_id,sender_user_id,original_text,translated_text,source_language,target_language"
+            ") VALUES(%s,%s,%s,%s,%s,%s,%s) "
+            "RETURNING id,sender_user_id,original_text,translated_text,source_language,target_language,created_at",
+            (new_id(), conversation_id, sender_user_id, original_text, translated_text,
+             source_language, target_language),
+        )
+
     def direct_with_preferences(self, creator, other, source_language, target_language):
         """Return the canonical direct conversation, creating it atomically if absent."""
         low, high = canonical_pair(creator, other)
@@ -128,14 +178,14 @@ class Repository:
                 return created["id"], True
 
             cursor.execute(
-                "SELECT id FROM conversations "
+                "SELECT id,created_by_user_id,default_source_language,default_target_language FROM conversations "
                 "WHERE direct_lower_user_id=%s AND direct_higher_user_id=%s",
                 (low, high),
             )
             existing = cursor.fetchone()
             if not existing:
                 raise RuntimeError("Direct conversation was not created")
-            return existing["id"], False
+            return existing["id"], False, existing
 
     def create_user(self, values):
         user_id = new_id()

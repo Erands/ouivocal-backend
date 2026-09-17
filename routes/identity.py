@@ -98,6 +98,39 @@ def create_conversation():
     )
 
 
+@identity_bp.get("/conversations")
+def list_conversations():
+    try:
+        current_user_id = _current_user_id()
+    except IdentityConfigurationError:
+        return jsonify(error="Identity service is unavailable"), 503
+    except PermissionError:
+        return jsonify(error="Authentication is required"), 401
+    return _run(lambda repo: identity_service.list_direct_conversations(repo, current_user_id))
+
+
+@identity_bp.get("/conversations/<conversation_id>/messages")
+def conversation_messages(conversation_id):
+    try:
+        current_user_id = _current_user_id()
+    except IdentityConfigurationError:
+        return jsonify(error="Identity service is unavailable"), 503
+    except PermissionError:
+        return jsonify(error="Authentication is required"), 401
+    return _run(lambda repo: identity_service.conversation_messages(repo, current_user_id, conversation_id))
+
+
+@identity_bp.post("/conversations/<conversation_id>/messages")
+def create_conversation_message(conversation_id):
+    try:
+        current_user_id = _current_user_id()
+    except IdentityConfigurationError:
+        return jsonify(error="Identity service is unavailable"), 503
+    except PermissionError:
+        return jsonify(error="Authentication is required"), 401
+    return _run(lambda repo: identity_service.create_conversation_message(repo, current_user_id, conversation_id, _request_data()), 201)
+
+
 @identity_bp.get("/contacts/<user_id>")
 def contact_relationship(user_id):
     try:
@@ -163,7 +196,6 @@ for rule, methods in [
     ("/ouivocal-id/check", ["GET"]),
     ("/users/<ouivocal_id>", ["GET"]),
     ("/me/languages", ["GET", "PUT"]),
-    ("/conversations", ["GET"]),
 ]:
     identity_bp.add_url_rule(
         rule,

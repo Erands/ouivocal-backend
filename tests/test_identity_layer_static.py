@@ -21,6 +21,13 @@ class MigrationInvariantTests(unittest.TestCase):
         self.assertIn("NOT creator_is_direct_participant", migration)
         self.assertIn("NOT creator_is_owner", migration)
 
+    def test_message_migration_records_its_version_and_refuses_inconsistent_state(self):
+        migration = Path("migrations/002_conversation_messages.sql").read_text()
+        self.assertIn("CREATE TABLE IF NOT EXISTS identity_schema_migrations", migration)
+        self.assertIn("002_conversation_messages", migration)
+        self.assertIn("conversation_messages exists without migration", migration)
+        self.assertIn("INSERT INTO identity_schema_migrations(version)", migration)
+
     def test_non_returning_mutations_use_execute(self):
         repository = Path("identity/repository.py").read_text()
         service = Path("identity/service.py").read_text()
