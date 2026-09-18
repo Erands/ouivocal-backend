@@ -50,6 +50,55 @@ class Repository:
             (user_id,),
         )
 
+    def get_user_language_preferences(self, user_id):
+        return self.one(
+            "SELECT user_id,interface_language,spoken_language,translation_source_language,"
+            "translation_target_language,auto_detect_language,text_translation_enabled,"
+            "voice_note_translation_enabled,created_at,updated_at "
+            "FROM user_language_preferences WHERE user_id=%s",
+            (user_id,),
+        )
+
+    def upsert_user_language_preferences(
+        self,
+        user_id,
+        interface_language,
+        spoken_language,
+        translation_source_language,
+        translation_target_language,
+        auto_detect_language,
+        text_translation_enabled,
+        voice_note_translation_enabled,
+    ):
+        return self.one(
+            "INSERT INTO user_language_preferences("
+            "user_id,interface_language,spoken_language,translation_source_language,"
+            "translation_target_language,auto_detect_language,text_translation_enabled,"
+            "voice_note_translation_enabled"
+            ") VALUES(%s,%s,%s,%s,%s,%s,%s,%s) "
+            "ON CONFLICT(user_id) DO UPDATE SET "
+            "interface_language=EXCLUDED.interface_language,"
+            "spoken_language=EXCLUDED.spoken_language,"
+            "translation_source_language=EXCLUDED.translation_source_language,"
+            "translation_target_language=EXCLUDED.translation_target_language,"
+            "auto_detect_language=EXCLUDED.auto_detect_language,"
+            "text_translation_enabled=EXCLUDED.text_translation_enabled,"
+            "voice_note_translation_enabled=EXCLUDED.voice_note_translation_enabled "
+            "RETURNING user_id,interface_language,spoken_language,translation_source_language,"
+            "translation_target_language,auto_detect_language,text_translation_enabled,"
+            "voice_note_translation_enabled,created_at,updated_at",
+            (
+                user_id,
+                interface_language,
+                spoken_language,
+                translation_source_language,
+                translation_target_language,
+                auto_detect_language,
+                text_translation_enabled,
+                voice_note_translation_enabled,
+            ),
+        )
+
     def contact_between(self, first_user_id, second_user_id):
         low, high = canonical_pair(first_user_id, second_user_id)
         return self.one(

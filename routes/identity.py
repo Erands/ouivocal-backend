@@ -186,6 +186,37 @@ def reject_contact_request(contact_id):
     return _run(lambda repo: identity_service.respond_to_contact_request(repo, current_user_id, contact_id, "rejected"))
 
 
+@identity_bp.get("/me/languages")
+def get_my_languages():
+    try:
+        current_user_id = _current_user_id()
+    except IdentityConfigurationError:
+        return jsonify(error="Identity service is unavailable"), 503
+    except PermissionError:
+        return jsonify(error="Authentication is required"), 401
+    return _run(
+        lambda repo: identity_service.get_user_language_preferences(
+            repo, current_user_id
+        )
+    )
+
+
+@identity_bp.put("/me/languages")
+def update_my_languages():
+    try:
+        current_user_id = _current_user_id()
+    except IdentityConfigurationError:
+        return jsonify(error="Identity service is unavailable"), 503
+    except PermissionError:
+        return jsonify(error="Authentication is required"), 401
+    data = request.get_json(silent=True)
+    return _run(
+        lambda repo: identity_service.update_user_language_preferences(
+            repo, current_user_id, data
+        )
+    )
+
+
 def inactive():
     return jsonify(error="Identity operation is not activated"), 503
 
@@ -195,7 +226,6 @@ for rule, methods in [
     ("/me", ["GET", "PATCH"]),
     ("/ouivocal-id/check", ["GET"]),
     ("/users/<ouivocal_id>", ["GET"]),
-    ("/me/languages", ["GET", "PUT"]),
 ]:
     identity_bp.add_url_rule(
         rule,

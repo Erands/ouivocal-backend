@@ -105,6 +105,47 @@ def list_direct_conversations(repo,current_user_id):
                         'unread_count':0})
  return {'conversations':conversations}
 
+def get_user_language_preferences(repo,current_user_id):
+ current=require_user_id(current_user_id,'Authenticated user')
+ if not repo.user(current): raise PermissionError('Authenticated user is not active')
+ row=repo.get_user_language_preferences(current)
+ if not row:
+  return {'interface_language':'en','spoken_language':'en',
+          'translation_source_language':'en','translation_target_language':'fr',
+          'auto_detect_language':True,'text_translation_enabled':True,
+          'voice_note_translation_enabled':True}
+ return {'interface_language':row['interface_language'],'spoken_language':row['spoken_language'],
+         'translation_source_language':row['translation_source_language'],
+         'translation_target_language':row['translation_target_language'],
+         'auto_detect_language':row['auto_detect_language'],
+         'text_translation_enabled':row['text_translation_enabled'],
+         'voice_note_translation_enabled':row['voice_note_translation_enabled']}
+
+def update_user_language_preferences(repo,current_user_id,data):
+ current=require_user_id(current_user_id,'Authenticated user')
+ if not repo.user(current): raise PermissionError('Authenticated user is not active')
+ if not isinstance(data,dict): raise validation.ValidationError('A JSON object is required')
+ interface_language=validation.require_language(data.get('interface_language'),'interface_language')
+ spoken_language=validation.require_language(data.get('spoken_language'),'spoken_language')
+ translation_source_language=validation.require_language(data.get('translation_source_language'),'translation_source_language')
+ translation_target_language=validation.require_language(data.get('translation_target_language'),'translation_target_language')
+ auto_detect_language=data.get('auto_detect_language')
+ text_translation_enabled=data.get('text_translation_enabled')
+ voice_note_translation_enabled=data.get('voice_note_translation_enabled')
+ if not isinstance(auto_detect_language,bool): raise validation.ValidationError('auto_detect_language must be a boolean')
+ if not isinstance(text_translation_enabled,bool): raise validation.ValidationError('text_translation_enabled must be a boolean')
+ if not isinstance(voice_note_translation_enabled,bool): raise validation.ValidationError('voice_note_translation_enabled must be a boolean')
+ row=repo.upsert_user_language_preferences(
+  current,interface_language,spoken_language,translation_source_language,translation_target_language,
+  auto_detect_language,text_translation_enabled,voice_note_translation_enabled,
+ )
+ return {'interface_language':row['interface_language'],'spoken_language':row['spoken_language'],
+         'translation_source_language':row['translation_source_language'],
+         'translation_target_language':row['translation_target_language'],
+         'auto_detect_language':row['auto_detect_language'],
+         'text_translation_enabled':row['text_translation_enabled'],
+         'voice_note_translation_enabled':row['voice_note_translation_enabled']}
+
 def conversation_messages(repo,current_user_id,conversation_id):
  current=require_user_id(current_user_id,'Authenticated user'); conversation=require_user_id(conversation_id,'conversation_id')
  if not repo.user(current): raise PermissionError('Authenticated user is not active')
@@ -129,12 +170,12 @@ def create_direct_conversation(repo,current_user_id,data):
  creator=require_user_id(current_user_id,'Authenticated user')
  participant_id=require_user_id(data.get('participant_id'),'participant_id')
  if creator == participant_id: raise validation.ValidationError('A conversation requires another participant')
- source_language=validation.require_language(data.get('my_language'),'my_language')
- target_language=validation.require_language(data.get('their_language'),'their_language')
  if not repo.user(creator): raise PermissionError('Authenticated user is not active')
  participant=repo.public_active_user(participant_id)
  if not participant: raise LookupError('Participant was not found or is inactive')
  if not repo.accepted_contact_exists(creator,participant_id): raise AuthorizationError('An accepted contact relationship is required')
+ source_language=get_user_language_preferences(repo,creator)['spoken_language']
+ target_language=get_user_language_preferences(repo,participant_id)['spoken_language']
  result=repo.direct_with_preferences(creator,participant_id,source_language,target_language)
  if len(result)==2:
   conversation_id,created=result

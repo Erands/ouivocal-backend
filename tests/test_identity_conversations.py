@@ -19,36 +19,66 @@ class ConversationServiceTests(unittest.TestCase):
             "identity_verified_at": None,
         }
 
-    def repository(self, participant=None):
+    def language_preferences(self, spoken_language):
+        return {
+            "interface_language": spoken_language,
+            "spoken_language": spoken_language,
+            "translation_source_language": spoken_language,
+            "translation_target_language": "fr",
+            "auto_detect_language": True,
+            "text_translation_enabled": True,
+            "voice_note_translation_enabled": True,
+        }
+
+    def repository(self, participant=None, preferences=None):
         class Repository:
             def user(_, user_id): return {"id": user_id}
             def public_active_user(_, user_id): return participant
+            def get_user_language_preferences(_, user_id): return _.preferences.get(user_id)
             def accepted_contact_exists(_, creator, other): return True
             def direct_with_preferences(_, creator, other, source, target):
                 _.call = (creator, other, source, target)
                 return uuid4(), True
-        return Repository()
+        repo = Repository()
+        repo.preferences = preferences if preferences is not None else {
+            self.creator: self.language_preferences("en"),
+            self.participant: self.language_preferences("fr"),
+        }
+        return repo
 
-    def test_creates_authenticated_direct_conversation_with_languages(self):
+    def test_creates_authenticated_direct_conversation_with_saved_languages(self):
         repo = self.repository(self.public_participant)
         result = service.create_direct_conversation(repo, self.creator, {
-            "participant_id": str(self.participant), "my_language": "en", "their_language": "fr",
+            "participant_id": str(self.participant),
         })
         self.assertEqual(repo.call, (self.creator, self.participant, "en", "fr"))
         self.assertTrue(result["created"])
         self.assertEqual(result["participant"]["oui_vocal_id"], "second_user")
         self.assertNotIn("email", result["participant"])
 
-    def test_rejects_self_invalid_language_and_missing_participant(self):
+    def test_uses_defaults_when_language_preferences_do_not_exist(self):
+        repo = self.repository(self.public_participant, preferences={})
+        service.create_direct_conversation(repo, self.creator, {
+            "participant_id": str(self.participant),
+        })
+        self.assertEqual(repo.call, (self.creator, self.participant, "en", "en"))
+
+    def test_client_supplied_languages_do_not_override_saved_languages(self):
+        repo = self.repository(self.public_participant)
+        service.create_direct_conversation(repo, self.creator, {
+            "participant_id": str(self.participant), "my_language": "pt", "their_language": "es",
+        })
+        self.assertEqual(repo.call, (self.creator, self.participant, "en", "fr"))
+
+    def test_rejects_self_and_missing_participant(self):
         repo = self.repository(None)
         for payload in (
-            {"participant_id": str(self.creator), "my_language": "en", "their_language": "fr"},
-            {"participant_id": str(self.participant), "my_language": "pt", "their_language": "fr"},
-            {"participant_id": "not-a-uuid", "my_language": "en", "their_language": "fr"},
+            {"participant_id": str(self.creator)},
+            {"participant_id": "not-a-uuid"},
         ):
             with self.assertRaises(ValidationError): service.create_direct_conversation(repo, self.creator, payload)
         with self.assertRaises(LookupError):
-            service.create_direct_conversation(repo, self.creator, {"participant_id": str(self.participant), "my_language": "en", "their_language": "fr"})
+            service.create_direct_conversation(repo, self.creator, {"participant_id": str(self.participant)})
 
     def test_duplicate_returns_existing_conversation(self):
         existing = uuid4()
